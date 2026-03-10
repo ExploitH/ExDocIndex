@@ -5,7 +5,7 @@
 **基于 AI 的文档自动理解与索引构建平台**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 [![LLM](https://img.shields.io/badge/LLM-Qwen%2FDeepSeek-orange.svg)](https://dashscope.aliyun.com/)
 
 [功能特性](#-功能特性) • [快速开始](#-快速开始) • [项目结构](#-项目结构) • [使用文档](#-使用文档) • [API 配置](#-api-配置)
@@ -234,7 +234,7 @@ python test_system.py
 
 ## 📄 许可证
 
-MIT License
+Apache License 2.0
 
 ---
 
@@ -244,6 +244,7 @@ MIT License
 > Mingtian Zhang, Yu Tang and PageIndex Team,  
 > "PageIndex: Next-Generation Vectorless, Reasoning-based RAG",  
 > PageIndex Blog, Sep 2025.
+
 **PageIndex Project**: https://github.com/VectifyAI/PageIndex
 
 ---
