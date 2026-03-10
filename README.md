@@ -129,7 +129,9 @@ ExDocIndex/
 
 ### 1. 上传文档
 
-将需要处理的文档放入 `WorkArea/InputDocs/` 目录，或通过 Web 界面上传。
+> **重要提示**：请通过 Web 界面上传文档，系统会自动将文件保存到 `WorkArea/InputDocs/` 目录并注册到数据库。直接手动放入文件将无法正常索引。
+
+访问 http://localhost:5000 后，在文件管理页面点击"上传文件"按钮。
 
 **支持的格式**：
 - 📄 PDF（支持 OCR）
@@ -139,29 +141,13 @@ ExDocIndex/
 
 ### 2. 理解文档
 
-对文档进行"理解"操作，生成结构化摘要：
-
-```python
-from doc_summarizer import understand_doc
-
-understand_doc(
-    doc_path="WorkArea/InputDocs/document.pdf",
-    output_dir="WorkArea/Summary"
-)
-```
+上传完成后，在 Web 界面点击文件的"理解"按钮，系统会自动：
+- 解析文档内容
+- 生成结构化 Markdown 摘要（保存到 `WorkArea/Summary/`）
 
 ### 3. 构建索引
 
-为理解后的文档创建索引：
-
-```python
-from doc_summarizer import summarize_doc
-
-summarize_doc(
-    doc_path="WorkArea/Summary/document.md",
-    index_path="WorkArea/index.json"
-)
-```
+理解完成后，点击"索引"按钮为文档创建高密度 JSON 索引（保存到 `WorkArea/index.json`）。
 
 ### 4. 使用 MCP 服务
 
@@ -249,6 +235,35 @@ python test_system.py
 ## 📄 许可证
 
 MIT License
+
+---
+
+## 🙏 致谢
+
+本项目灵感来源于 **PageIndex** 项目，感谢他们的开源贡献。
+
+### ⭐ Support Us
+
+Please cite this work as:
+
+> Mingtian Zhang, Yu Tang and PageIndex Team,  
+> "PageIndex: Next-Generation Vectorless, Reasoning-based RAG",  
+> PageIndex Blog, Sep 2025.
+
+Or use the BibTeX citation:
+
+```bibtex
+@article{zhang2025pageindex,
+  author = {Mingtian Zhang and Yu Tang and PageIndex Team},
+  title = {PageIndex: Next-Generation Vectorless, Reasoning-based RAG},
+  journal = {PageIndex Blog},
+  year = {2025},
+  month = {September},
+  note = {https://pageindex.ai/blog/pageindex-intro},
+}
+```
+
+**PageIndex Project**: https://github.com/VectifyAI/PageIndex
 
 ---
 
