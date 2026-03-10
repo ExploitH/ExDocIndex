@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - ExDocIndex{% endblock %}
+
+{% block content %}
+<div class="welcome-section">
+    <h1>欢迎使用 ExDocIndex 管理系统</h1>
+    <p>这是一个智能文档索引生成与管理平台</p>
+</div>
+
+<div class="features-grid">
+    <div class="feature-card">
+        <h3>📁 文件管理</h3>
+        <p>支持上传、删除 PDF、HTML、MD、TXT 文件，树形结构组织，自动关联理解文件</p>
+        <a href="{{ url_for('files_page') }}" class="btn btn-primary">进入文件管理</a>
+    </div>
+
+    <div class="feature-card">
+        <h3>🤖 智能理解</h3>
+        <p>使用 AI 模型自动解析文档，OCR 纠错，生成结构化 Markdown</p>
+        <div class="status-info">
+            <p>已理解文件：<span id="understood-count">-</span></p>
+        </div>
+    </div>
+
+    <div class="feature-card">
+        <h3>📊 索引构建</h3>
+        <p>为文档生成高质量索引，支持直接索引和二次索引，JSONL 格式输出</p>
+        <div class="status-info">
+            <p>已索引文件：<span id="indexed-count">-</span></p>
+        </div>
+    </div>
+
+    <div class="feature-card">
+        <h3>⚙️ 系统状态</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <span class="stat-label">总文件数</span>
+                <span class="stat-value" id="total-files">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">待处理任务</span>
+                <span class="stat-value" id="pending-tasks">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">运行中任务</span>
+                <span class="stat-value" id="running-tasks">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">工作目录</span>
+                <span class="stat-value-small" id="workdir-display">-</span>
+            </div>
+        </div>
+        <a href="{{ url_for('settings_page') }}" class="btn btn-secondary">查看设置</a>
+    </div>
+</div>
+
+<div class="recent-section">
+    <h2>快速操作</h2>
+    <div class="quick-actions">
+        <button onclick="location.href='{{ url_for('files_page') }}'" class="btn btn-primary">
+            📤 上传文件
+        </button>
+        <button onclick="location.href='{{ url_for('files_page') }}'" class="btn btn-secondary">
+            📂 新建文件夹
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 加载统计信息
+async function loadStatistics() {
+    try {
+        const response = await fetch('/api/statistics');
+        const data = await response.json();
+        
+        if (data.success) {
+            const stats = data.statistics;
+            document.getElementById('total-files').textContent = stats.total_files;
+            document.getElementById('understood-count').textContent = stats.understood_files;
+            document.getElementById('indexed-count').textContent = stats.indexed_files || '-';
+            document.getElementById('pending-tasks').textContent = stats.pending_tasks;
+            document.getElementById('running-tasks').textContent = stats.running_tasks;
+            
+            // 更新队列状态
+            document.getElementById('queue-count').textContent = stats.pending_tasks + stats.running_tasks;
+        }
+        
+        // 加载工作目录
+        const settingsResponse = await fetch('/api/settings');
+        const settingsData = await settingsResponse.json();
+        if (settingsData.success) {
+            document.getElementById('workdir-display').textContent = settingsData.settings.workdir;
+        }
+    } catch (error) {
+        console.error('加载统计信息失败:', error);
+    }
+}
+
+// 页面加载时获取统计信息
+loadStatistics();
+
+// 每 5 秒刷新一次
+setInterval(loadStatistics, 5000);
+</script>
+{% endblock %}

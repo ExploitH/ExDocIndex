@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}设置 - ExDocIndex{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>系统设置</h1>
+</div>
+
+<div class="settings-container">
+    <div class="settings-section">
+        <h2>🔑 API 配置</h2>
+        <p class="section-description">配置 LLM API 相关参数，用于文档理解和索引生成</p>
+        
+        <form id="api-settings-form">
+            <div class="form-group">
+                <label for="llm-api-key">API Key</label>
+                <input type="password" id="llm-api-key" name="llm_api_key" placeholder="输入 API Key">
+                <div class="form-hint">您的 API Key 将被加密保存</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="llm-base-url">API Base URL</label>
+                <input type="url" id="llm-base-url" name="llm_base_url" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
+            </div>
+            
+            <div class="form-group">
+                <label for="llm-model">模型名称</label>
+                <input type="text" id="llm-model" name="llm_model" placeholder="qwen3.5-plus" value="qwen3.5-plus">
+                <div class="form-hint">当前支持的模型：qwen3.5-plus 等</div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                <button type="button" class="btn btn-secondary" onclick="loadSettings()">重置</button>
+            </div>
+        </form>
+    </div>
+    
+    <div class="settings-section">
+        <h2>📂 工作目录</h2>
+        <p class="section-description">配置文件存储的工作目录路径</p>
+        
+        <div class="form-group">
+            <label for="workdir">工作目录路径</label>
+            <input type="text" id="workdir" readonly>
+            <div class="form-hint">
+                工作目录用于存储所有文件、理解结果和索引数据<br>
+                如需修改，请编辑 <code>settings.property</code> 文件
+            </div>
+        </div>
+        
+        <div class="directory-info">
+            <h3>目录结构</h3>
+            <ul>
+                <li><code>InputDocs/</code> - 上传的原始文件</li>
+                <li><code>Summary/</code> - 理解后的 Markdown 文件</li>
+                <li><code>index.json</code> - 索引数据文件</li>
+                <li><code>exdocindex.db</code> - SQLite 数据库</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <h2>📊 系统信息</h2>
+        
+        <div class="system-info-grid">
+            <div class="info-item">
+                <span class="info-label">数据库路径</span>
+                <span class="info-value" id="db-path">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">索引文件路径</span>
+                <span class="info-value" id="index-path">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">错误日志目录</span>
+                <span class="info-value" id="error-log-path">-</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <h2>⚠️ 危险操作</h2>
+        
+        <div class="danger-zone">
+            <h3>清空所有数据</h3>
+            <p>此操作将删除所有文件记录、理解结果和索引数据（物理文件不会被删除）</p>
+            <button class="btn btn-danger" onclick="clearAllData()">清空所有数据</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 加载设置
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+        
+        if (data.success) {
+            const settings = data.settings;
+            document.getElementById('llm-api-key').value = settings.api_key || '';
+            document.getElementById('llm-base-url').value = settings.base_url || '';
+            document.getElementById('llm-model').value = settings.model || 'qwen3.5-plus';
+            document.getElementById('workdir').value = settings.workdir || '';
+            
+            // 更新系统信息
+            document.getElementById('db-path').textContent = settings.workdir + '/exdocindex.db';
+            document.getElementById('index-path').textContent = settings.workdir + '/index.json';
+            document.getElementById('error-log-path').textContent = settings.workdir + '/../web/error_logs';
+        }
+    } catch (error) {
+        console.error('加载设置失败:', error);
+        showToast('加载设置失败', 'error');
+    }
+}
+
+// 保存设置
+async function saveSettings() {
+    const settings = {
+        llm_api_key: document.getElementById('llm-api-key').value,
+        llm_base_url: document.getElementById('llm-base-url').value,
+        llm_model: document.getElementById('llm-model').value
+    };
+    
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('设置已保存', 'success');
+        } else {
+            showToast('保存失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 清空所有数据
+async function clearAllData() {
+    const confirmed = await showConfirm(
+        '确认清空数据',
+        '此操作将删除数据库中的所有记录（文件、理解记录、索引记录、任务记录）。\n\n物理文件不会被删除，但将失去关联。\n\n此操作不可恢复，确定继续吗？',
+        '确认清空',
+        '取消'
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    // 注意：这里需要后端 API 支持
+    showToast('此功能尚未实现', 'info');
+}
+
+// 页面加载
+loadSettings();
+</script>
+{% endblock %}

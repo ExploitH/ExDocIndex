@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+
+{% block title %}文件管理 - ExDocIndex{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>文件管理</h1>
+    <div class="header-actions">
+        <button id="btn-upload" class="btn btn-primary" onclick="showUploadModal()">
+            📤 上传文件
+        </button>
+        <button id="btn-new-folder" class="btn btn-secondary" onclick="showNewFolderModal()">
+            📂 新建文件夹
+        </button>
+    </div>
+</div>
+
+<!-- 面包屑导航 -->
+<div class="breadcrumb" id="breadcrumb">
+    <span class="breadcrumb-item" data-path="">根目录</span>
+</div>
+
+<!-- 文件列表 -->
+<div class="file-list-container">
+    <table class="file-list" id="file-list">
+        <thead>
+            <tr>
+                <th width="40">类型</th>
+                <th>文件名</th>
+                <th width="100">大小</th>
+                <th width="120">状态</th>
+                <th width="100">理解</th>
+                <th width="100">索引</th>
+                <th width="150">操作</th>
+            </tr>
+        </thead>
+        <tbody id="file-list-body">
+            <tr>
+                <td colspan="7" class="loading">加载中...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- 上传文件模态框 -->
+<div id="upload-modal" class="modal">
+    <div class="modal-content">
+        <h3>上传文件</h3>
+        <div class="form-group">
+            <label for="file-input">选择文件</label>
+            <input type="file" id="file-input" accept=".pdf,.html,.md,.txt" multiple>
+        </div>
+        <div class="form-hint">
+            支持格式：PDF, HTML, Markdown, TXT<br>
+            最大文件大小：100MB
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideUploadModal()">取消</button>
+            <button class="btn btn-primary" onclick="uploadFiles()">上传</button>
+        </div>
+    </div>
+</div>
+
+<!-- 新建文件夹模态框 -->
+<div id="folder-modal" class="modal">
+    <div class="modal-content">
+        <h3>新建文件夹</h3>
+        <div class="form-group">
+            <label for="folder-name">文件夹名称</label>
+            <input type="text" id="folder-name" placeholder="输入文件夹名称">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideFolderModal()">取消</button>
+            <button class="btn btn-primary" onclick="createFolder()">创建</button>
+        </div>
+    </div>
+</div>
+
+<!-- 查看理解文件模态框 -->
+<div id="summary-modal" class="modal modal-large">
+    <div class="modal-content">
+        <h3>理解结果</h3>
+        <div class="summary-content" id="summary-content">
+            <div class="loading">加载中...</div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideSummaryModal()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 查看索引模态框 -->
+<div id="index-modal" class="modal modal-large">
+    <div class="modal-content">
+        <h3>索引数据</h3>
+        <pre class="index-content" id="index-content"></pre>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideIndexModal()">关闭</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPath = '';
+let refreshTimer = null;
+
+// 加载文件列表
+async function loadFiles(path = '') {
+    try {
+        const response = await fetch(`/api/files?parent_path=${encodeURIComponent(path)}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderFileList(data.files);
+            currentPath = path;
+            updateBreadcrumb(path);
+        } else {
+            showToast('加载文件列表失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('加载文件列表失败:', error);
+        showToast('网络错误', 'error');
+    }
+}
+
+// 渲染文件列表
+function renderFileList(files) {
+    const tbody = document.getElementById('file-list-body');
+    
+    if (files.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">此目录为空</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    files.forEach(file => {
+        const icon = file.is_directory ? '📁' : getFileIcon(file.file_type);
+        const statusClass = getStatusClass(file.status, file.task_status);
+        const statusText = getStatusText(file.status, file.task_status);
+        
+        html += `
+            <tr data-file-id="${file.id}" data-file-type="${file.is_directory ? 'directory' : file.file_type}">
+                <td>${icon}</td>
+                <td>
+                    ${file.is_directory ? 
+                        `<a href="#" class="file-link" onclick="enterDirectory('${file.filepath}', event)">${file.filename}</a>` :
+                        `<span class="file-name">${file.filename}</span>`
+                    }
+                </td>
+                <td>${formatFileSize(file.file_size, file.is_directory)}</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td>
+                    ${!file.is_directory ? `
+                        <button class="btn btn-small ${file.is_understood ? 'btn-success' : 'btn-primary'}" 
+                                onclick="understandFile(${file.id}, ${file.is_understood})"
+                                ${file.task_status === 'running' ? 'disabled' : ''}>
+                            ${file.is_understood ? '✓' : '理解'}
+                        </button>
+                    ` : '-'}
+                </td>
+                <td>
+                    ${!file.is_directory ? `
+                        <button class="btn btn-small ${file.is_indexed ? 'btn-success' : 'btn-secondary'}" 
+                                onclick="createIndex(${file.id}, ${file.is_understood}, ${file.is_indexed})"
+                                ${file.task_status === 'running' ? 'disabled' : ''}>
+                            ${file.is_indexed ? '✓' : '索引'}
+                        </button>
+                    ` : '-'}
+                </td>
+                <td>
+                    ${!file.is_directory && file.is_understood ? `
+                        <button class="btn btn-small btn-info" onclick="viewSummary(${file.id})">查看</button>
+                    ` : ''}
+                    ${file.is_indexed ? `
+                        <button class="btn btn-small btn-info" onclick="viewIndex(${file.id})">索引</button>
+                    ` : ''}
+                    <button class="btn btn-small btn-danger" onclick="deleteFile(${file.id}, '${file.filename}')">删除</button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// 进入目录
+function enterDirectory(path, event) {
+    event.preventDefault();
+    loadFiles(path);
+}
+
+// 更新面包屑
+function updateBreadcrumb(path) {
+    const breadcrumb = document.getElementById('breadcrumb');
+    const parts = path ? path.split('/') : [];
+    
+    let html = '<span class="breadcrumb-item" data-path="">根目录</span>';
+    
+    let currentPath = '';
+    parts.forEach((part, index) => {
+        currentPath = currentPath ? currentPath + '/' + part : part;
+        html += ` > <span class="breadcrumb-item" data-path="${currentPath}" onclick="enterDirectory('${currentPath}', event)">${part}</span>`;
+    });
+    
+    breadcrumb.innerHTML = html;
+}
+
+// 显示上传模态框
+function showUploadModal() {
+    document.getElementById('upload-modal').style.display = 'block';
+}
+
+// 隐藏上传模态框
+function hideUploadModal() {
+    document.getElementById('upload-modal').style.display = 'none';
+    document.getElementById('file-input').value = '';
+}
+
+// 上传文件
+async function uploadFiles() {
+    const fileInput = document.getElementById('file-input');
+    const files = fileInput.files;
+    
+    if (files.length === 0) {
+        showToast('请选择文件', 'warning');
+        return;
+    }
+    
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append('file', file);
+        if (currentPath) {
+            formData.append('parent_path', currentPath);
+        }
+        
+        try {
+            const response = await fetch('/api/files/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast(`文件上传成功：${file.name}`, 'success');
+            } else if (data.conflict) {
+                // 文件冲突，询问用户
+                const confirmed = await showConfirm(
+                    '文件已存在',
+                    `文件 ${file.name} 已存在，是否覆盖？`,
+                    '覆盖',
+                    '跳过'
+                );
+                
+                if (confirmed) {
+                    // 覆盖上传
+                    const overwriteResponse = await fetch('/api/files/upload', {
+                        method: 'PUT',
+                        body: formData
+                    });
+                    const overwriteData = await overwriteResponse.json();
+                    if (overwriteData.success) {
+                        showToast(`文件已覆盖：${file.name}`, 'success');
+                    } else {
+                        showToast(`覆盖失败：${overwriteData.error}`, 'error');
+                    }
+                } else {
+                    showToast(`已跳过：${file.name}`, 'info');
+                }
+            } else {
+                showToast(`上传失败：${data.error}`, 'error');
+            }
+        } catch (error) {
+            showToast(`上传错误：${error.message}`, 'error');
+        }
+    }
+    
+    hideUploadModal();
+    loadFiles(currentPath);
+}
+
+// 显示新建文件夹模态框
+function showNewFolderModal() {
+    document.getElementById('folder-modal').style.display = 'block';
+    document.getElementById('folder-name').focus();
+}
+
+// 隐藏新建文件夹模态框
+function hideFolderModal() {
+    document.getElementById('folder-modal').style.display = 'none';
+    document.getElementById('folder-name').value = '';
+}
+
+// 创建文件夹
+async function createFolder() {
+    const folderName = document.getElementById('folder-name').value.trim();
+    
+    if (!folderName) {
+        showToast('请输入文件夹名称', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/directories', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dirname: folderName,
+                parent_path: currentPath || null
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('文件夹创建成功', 'success');
+            hideFolderModal();
+            loadFiles(currentPath);
+        } else {
+            showToast('创建失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 理解文件
+async function understandFile(fileId, isUnderstood) {
+    if (isUnderstood) {
+        showToast('文件已理解，如需重新生成请先删除原理解文件', 'info');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/files/${fileId}/understand`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('理解任务已提交到队列', 'success');
+            // 开始轮询任务状态
+            startTaskPolling(fileId);
+        } else {
+            showToast('操作失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 创建索引
+async function createIndex(fileId, isUnderstood, isIndexed) {
+    if (isIndexed) {
+        showToast('文件已索引', 'info');
+        return;
+    }
+    
+    let isDirect = false;
+    
+    if (!isUnderstood) {
+        // 未理解文件，需要确认
+        const confirmed = await showConfirm(
+            '直接索引警告',
+            '文件尚未经过理解处理，直接索引可能影响索引质量。\n\n是否确认要直接索引？',
+            '确认索引',
+            '取消'
+        );
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        isDirect = true;
+    }
+    
+    try {
+        const response = await fetch(`/api/files/${fileId}/index`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                is_direct: isDirect
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('索引任务已提交到队列', 'success');
+            startTaskPolling(fileId);
+        } else {
+            showToast('操作失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 查看理解文件
+async function viewSummary(fileId) {
+    try {
+        const response = await fetch(`/api/files/${fileId}/summary`);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('summary-content').innerHTML = 
+                `<pre>${escapeHtml(data.content)}</pre>`;
+            document.getElementById('summary-modal').style.display = 'block';
+        } else {
+            showToast('加载失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 隐藏理解文件模态框
+function hideSummaryModal() {
+    document.getElementById('summary-modal').style.display = 'none';
+}
+
+// 查看索引
+async function viewIndex(fileId) {
+    try {
+        const response = await fetch(`/api/files/${fileId}/index`);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('index-content').textContent = 
+                JSON.stringify(data.index_data, null, 2);
+            document.getElementById('index-modal').style.display = 'block';
+        } else {
+            showToast('加载失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 隐藏索引模态框
+function hideIndexModal() {
+    document.getElementById('index-modal').style.display = 'none';
+}
+
+// 删除文件
+async function deleteFile(fileId, filename) {
+    const confirmed = await showConfirm(
+        '确认删除',
+        `确定要删除文件 "${filename}" 吗？\n\n注意：这将同时删除相关的理解文件和索引记录！`,
+        '删除',
+        '取消'
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/files/${fileId}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('文件已删除', 'success');
+            loadFiles(currentPath);
+        } else {
+            showToast('删除失败：' + data.error, 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 轮询任务状态
+const pollingFiles = new Set();
+
+function startTaskPolling(fileId) {
+    if (pollingFiles.has(fileId)) {
+        return;
+    }
+    
+    pollingFiles.add(fileId);
+    
+    const pollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/files/${fileId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const file = data.file;
+                
+                // 如果任务已完成或失败，停止轮询
+                if (file.task_status !== 'running') {
+                    clearInterval(pollInterval);
+                    pollingFiles.delete(fileId);
+                    loadFiles(currentPath);
+                    
+                    if (file.task_status === 'failed') {
+                        showToast('任务失败，请查看错误日志', 'error');
+                    }
+                } else {
+                    // 任务仍在进行，更新 UI
+                    const row = document.querySelector(`tr[data-file-id="${fileId}"]`);
+                    if (row) {
+                        const statusCell = row.querySelector('td:nth-child(4)');
+                        if (statusCell) {
+                            statusCell.innerHTML = '<span class="status-badge status-running">运行中</span>';
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('轮询任务状态失败:', error);
+        }
+    }, 2000);
+}
+
+// 工具函数
+function getFileIcon(type) {
+    const icons = {
+        'pdf': '📄',
+        'html': '🌐',
+        'md': '📝',
+        'txt': '📃'
+    };
+    return icons[type] || '📄';
+}
+
+function formatFileSize(size, isDirectory) {
+    if (isDirectory) return '-';
+    if (!size) return '0 B';
+    
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let unitIndex = 0;
+    let sizeNum = size;
+    
+    while (sizeNum >= 1024 && unitIndex < units.length - 1) {
+        sizeNum /= 1024;
+        unitIndex++;
+    }
+    
+    return `${sizeNum.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function getStatusClass(status, taskStatus) {
+    if (taskStatus === 'running') return 'status-running';
+    if (taskStatus === 'failed') return 'status-failed';
+    
+    switch(status) {
+        case 'uploaded': return 'status-uploaded';
+        case 'understanding': return 'status-running';
+        case 'understood': return 'status-understood';
+        case 'failed': return 'status-failed';
+        default: return '';
+    }
+}
+
+function getStatusText(status, taskStatus) {
+    if (taskStatus === 'running') return '运行中...';
+    if (taskStatus === 'failed') return '失败';
+    
+    switch(status) {
+        case 'uploaded': return '已上传';
+        case 'understanding': return '理解中';
+        case 'understood': return '已理解';
+        case 'failed': return '失败';
+        default: return status;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 页面加载
+loadFiles();
+
+// 定时刷新（更新任务状态）
+setInterval(() => {
+    loadFiles(currentPath);
+}, 5000);
+
+// 模态框点击外部关闭
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

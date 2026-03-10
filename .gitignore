@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# API Keys & Secrets (敏感配置文件)
+settings.property
+*.key
+*.secret
+.env
+
+# Cache & Temporary Files
+cache/
+*.cache
+tmp/
+temp/
+
+# Logs
+*.log
+logs/
+error_logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Output directories
+WorkArea/InputDocs/
+WorkArea/Summary/
+index.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+pytest_cache/
+.coverage
+htmlcov/
