@@ -241,28 +241,9 @@ MIT License
 ## 🙏 致谢
 
 本项目灵感来源于 **PageIndex** 项目，感谢他们的开源贡献。
-
-### ⭐ Support Us
-
-Please cite this work as:
-
 > Mingtian Zhang, Yu Tang and PageIndex Team,  
 > "PageIndex: Next-Generation Vectorless, Reasoning-based RAG",  
 > PageIndex Blog, Sep 2025.
-
-Or use the BibTeX citation:
-
-```bibtex
-@article{zhang2025pageindex,
-  author = {Mingtian Zhang and Yu Tang and PageIndex Team},
-  title = {PageIndex: Next-Generation Vectorless, Reasoning-based RAG},
-  journal = {PageIndex Blog},
-  year = {2025},
-  month = {September},
-  note = {https://pageindex.ai/blog/pageindex-intro},
-}
-```
-
 **PageIndex Project**: https://github.com/VectifyAI/PageIndex
 
 ---
