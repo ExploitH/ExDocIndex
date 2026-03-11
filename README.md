@@ -5,7 +5,7 @@
 **基于 AI 的文档自动理解与索引构建平台**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![LLM](https://img.shields.io/badge/LLM-Qwen%2FDeepSeek-orange.svg)](https://dashscope.aliyun.com/)
 
 [功能特性](#-功能特性) • [快速开始](#-快速开始) • [项目结构](#-项目结构) • [使用文档](#-使用文档) • [API 配置](#-api-配置)
@@ -234,7 +234,7 @@ python test_system.py
 
 ## 📄 许可证
 
-Apache License 2.0
+MIT License
 
 ---
 
