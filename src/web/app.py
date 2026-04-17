@@ -2,13 +2,13 @@
 ExDocIndex Web 管理系统
 Flask 主应用
 """
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify
 import os
 import sys
-import json
 import logging
 import re
-from datetime import datetime
+import secrets
+from typing import Dict
 
 os.environ['MINERU_MODEL_SOURCE'] = 'modelscope'
 # 添加父目录到路径
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # 创建 Flask 应用
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'exdocindex-secret-key-2024'
+app.config['SECRET_KEY'] = os.getenv('EXDOCINDEX_SECRET_KEY', secrets.token_hex(32))
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 最大上传 100MB
 
 # 全局变量
@@ -57,6 +57,40 @@ def init_app():
     logger.info("任务处理器初始化完成")
 
 
+def _load_settings() -> Dict[str, str]:
+    """安全加载 settings.property，仅支持 key = value 字面量格式"""
+    settings_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'settings.property'
+    )
+
+    config: Dict[str, str] = {}
+    if not os.path.exists(settings_path):
+        return config
+
+    pattern = re.compile(r'^\s*([A-Za-z_]\w*)\s*=\s*(.*)\s*$')
+    with open(settings_path, 'r', encoding='utf-8') as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith('#'):
+                continue
+            matched = pattern.match(line)
+            if not matched:
+                continue
+            key, value = matched.groups()
+            value = value.strip()
+            if value.startswith('r"') and value.endswith('"'):
+                value = value[2:-1]
+            elif value.startswith('r\'') and value.endswith('\''):
+                value = value[2:-1]
+            elif value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
+            elif value.startswith('\'') and value.endswith('\''):
+                value = value[1:-1]
+            config[key] = value
+    return config
+
+
 def get_workdir() -> str:
     """从配置文件获取工作目录"""
     settings_path = os.path.join(
@@ -65,9 +99,7 @@ def get_workdir() -> str:
     )
     
     if os.path.exists(settings_path):
-        config = {}
-        with open(settings_path, 'r', encoding='utf-8') as f:
-            exec(f.read(), config)
+        config = _load_settings()
         return config.get('workdir', './WorkArea')
     
     return './WorkArea'
@@ -75,15 +107,7 @@ def get_workdir() -> str:
 
 def get_api_config() -> dict:
     """获取 API 配置"""
-    settings_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        'settings.property'
-    )
-    
-    config = {}
-    if os.path.exists(settings_path):
-        with open(settings_path, 'r', encoding='utf-8') as f:
-            exec(f.read(), config)
+    config = _load_settings()
     
     return {
         'api_key': config.get('llm_api_key', ''),
@@ -169,6 +193,16 @@ def sanitize_filename(filename: str) -> str:
     return safe_name if safe_name else 'unnamed_file'
 
 
+ALLOWED_UPLOAD_EXTENSIONS = {'pdf', 'html', 'md', 'txt'}
+
+
+def validate_upload_extension(filename: str) -> bool:
+    if '.' not in filename:
+        return False
+    extension = filename.rsplit('.', 1)[-1].lower()
+    return extension in ALLOWED_UPLOAD_EXTENSIONS
+
+
 @app.route('/api/files/upload', methods=['POST'])
 def upload_file():
     """上传文件"""
@@ -192,6 +226,12 @@ def upload_file():
         # 清理文件名（保留中文）
         original_filename = file.filename
         filename = sanitize_filename(original_filename)
+
+        if not validate_upload_extension(filename):
+            return jsonify({
+                'success': False,
+                'error': '仅支持上传 pdf/html/md/txt 文件'
+            }), 400
         
         # 确保有扩展名
         if '.' not in filename and '.' in original_filename:
@@ -245,6 +285,11 @@ def overwrite_file():
         file = request.files['file']
         original_filename = file.filename
         filename = sanitize_filename(original_filename)
+        if not validate_upload_extension(filename):
+            return jsonify({
+                'success': False,
+                'error': '仅支持上传 pdf/html/md/txt 文件'
+            }), 400
         
         # 确保有扩展名
         if '.' not in filename and '.' in original_filename:
@@ -319,6 +364,11 @@ def create_directory():
     """创建目录"""
     try:
         data = request.get_json()
+        if not isinstance(data, dict):
+            return jsonify({
+                'success': False,
+                'error': '请求体必须为 JSON 对象'
+            }), 400
         dirname = data.get('dirname', '')
         parent_path = data.get('parent_path', None)
         
@@ -380,16 +430,14 @@ def understand_file(file_id):
                 'error': '文件正在理解中，请稍候'
             }), 400
         
-        # 获取 API 配置
-        config = get_api_config()
-        
         # 提交任务到队列
-        task_processor.submit_task('understand', file_id)
+        task_id = task_processor.submit_task('understand', file_id)
         
         logger.info(f"理解任务已提交：文件 ID={file_id}")
         return jsonify({
             'success': True,
-            'message': '理解任务已提交到队列'
+            'message': '理解任务已提交到队列',
+            'task_id': task_id
         })
     except FileStateError as e:
         return jsonify({
@@ -478,12 +526,13 @@ def create_index(file_id):
             }), 400
         
         # 提交任务到队列
-        task_processor.submit_task('index', file_id)
+        task_id = task_processor.submit_task('index', file_id)
         
         logger.info(f"索引任务已提交：文件 ID={file_id} (直接索引={is_direct})")
         return jsonify({
             'success': True,
-            'message': '索引任务已提交到队列'
+            'message': '索引任务已提交到队列',
+            'task_id': task_id
         })
     except FileStateError as e:
         return jsonify({
@@ -621,6 +670,11 @@ def update_settings():
     """更新设置"""
     try:
         data = request.get_json()
+        if not isinstance(data, dict):
+            return jsonify({
+                'success': False,
+                'error': '请求体必须为 JSON 对象'
+            }), 400
         
         # 读取现有配置
         settings_path = os.path.join(
@@ -628,10 +682,7 @@ def update_settings():
             'settings.property'
         )
         
-        config = {}
-        if os.path.exists(settings_path):
-            with open(settings_path, 'r', encoding='utf-8') as f:
-                exec(f.read(), config)
+        config = _load_settings()
         
         # 更新配置
         if 'llm_api_key' in data:
@@ -703,7 +754,8 @@ if __name__ == '__main__':
     try:
         init_app()
         logger.info("启动 Flask 服务器...")
-        app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+        debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+        app.run(host='0.0.0.0', port=5000, debug=debug_mode, use_reloader=False)
     except KeyboardInterrupt:
         logger.info("接收到退出信号，正在关闭...")
         stop_task_processor()
