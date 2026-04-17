@@ -55,7 +55,7 @@ class TaskProcessor:
             self.worker_thread.join(timeout=5)
         logger.info("任务处理器已停止")
     
-    def submit_task(self, task_type: str, file_id: int):
+    def submit_task(self, task_type: str, file_id: int) -> int:
         """
         提交任务到队列
         
@@ -65,6 +65,7 @@ class TaskProcessor:
         task_id = self.db.add_task(task_type, file_id)
         self.task_queue.put(task_id)
         logger.info(f"任务已提交：类型={task_type}, 文件 ID={file_id}, 任务 ID={task_id}")
+        return task_id
     
     def _worker_loop(self):
         """工作线程主循环"""

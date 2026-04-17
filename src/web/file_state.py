@@ -48,6 +48,26 @@ class FileStateManager:
     def _get_absolute_path(self, relative_path: str) -> str:
         """获取绝对路径"""
         return os.path.normpath(os.path.join(self.workdir, relative_path))
+
+    def _validate_parent_path(self, parent_path: Optional[str]) -> Optional[str]:
+        """验证并规范化 parent_path，阻止路径穿越"""
+        if parent_path is None:
+            return None
+        normalized = os.path.normpath(parent_path).replace('\\', '/').strip('/')
+        if normalized in ('', '.'):
+            return None
+        if normalized.startswith('..') or '/..' in normalized:
+            raise FileStateError("非法父目录路径")
+        return normalized
+
+    def _safe_join_under_input_docs(self, *parts: str) -> str:
+        """安全拼接路径，确保目标路径始终在 InputDocs 内"""
+        candidate = os.path.normpath(os.path.join(self.input_docs_dir, *parts))
+        input_docs_abs = os.path.abspath(self.input_docs_dir)
+        candidate_abs = os.path.abspath(candidate)
+        if os.path.commonpath([candidate_abs, input_docs_abs]) != input_docs_abs:
+            raise FileStateError("非法路径访问")
+        return candidate
     
     # ========== 文件上传 ==========
     def upload_file(self, filename: str, file_content: bytes, 
@@ -62,14 +82,15 @@ class FileStateManager:
         :raises FileStateError: 如果文件已存在
         """
         # 构建目标路径
-        if parent_path:
-            target_dir = os.path.join(self.input_docs_dir, parent_path)
-            relative_path = os.path.join(parent_path, filename)
+        normalized_parent = self._validate_parent_path(parent_path)
+        if normalized_parent:
+            target_dir = self._safe_join_under_input_docs(normalized_parent)
+            relative_path = os.path.join(normalized_parent, filename)
         else:
             target_dir = self.input_docs_dir
             relative_path = filename
-        
-        target_path = os.path.join(target_dir, filename)
+
+        target_path = self._safe_join_under_input_docs(relative_path)
         
         # 检查是否已存在
         if os.path.exists(target_path):
@@ -88,8 +109,8 @@ class FileStateManager:
         
         # 获取父目录 ID
         parent_id = None
-        if parent_path:
-            parent_file = self.db.get_file_by_path(parent_path)
+        if normalized_parent:
+            parent_file = self.db.get_file_by_path(normalized_parent)
             if parent_file:
                 parent_id = parent_file['id']
         
@@ -114,11 +135,12 @@ class FileStateManager:
         :param parent_path: 父目录相对路径（可选）
         :return: (dir_id, relative_path)
         """
-        if parent_path:
-            target_dir = os.path.join(self.input_docs_dir, parent_path, dirname)
-            relative_path = os.path.join(parent_path, dirname)
+        normalized_parent = self._validate_parent_path(parent_path)
+        if normalized_parent:
+            target_dir = self._safe_join_under_input_docs(normalized_parent, dirname)
+            relative_path = os.path.join(normalized_parent, dirname)
         else:
-            target_dir = os.path.join(self.input_docs_dir, dirname)
+            target_dir = self._safe_join_under_input_docs(dirname)
             relative_path = dirname
         
         # 创建目录
@@ -126,8 +148,8 @@ class FileStateManager:
         
         # 获取父目录 ID
         parent_id = None
-        if parent_path:
-            parent_file = self.db.get_file_by_path(parent_path)
+        if normalized_parent:
+            parent_file = self.db.get_file_by_path(normalized_parent)
             if parent_file:
                 parent_id = parent_file['id']
         
@@ -396,8 +418,9 @@ class FileStateManager:
         :return: 文件列表
         """
         parent_id = None
-        if parent_path:
-            parent_file = self.db.get_file_by_path(parent_path)
+        normalized_parent = self._validate_parent_path(parent_path)
+        if normalized_parent:
+            parent_file = self.db.get_file_by_path(normalized_parent)
             if parent_file:
                 parent_id = parent_file['id']
         
@@ -460,10 +483,11 @@ class FileStateManager:
     
     def check_name_conflict(self, filename: str, parent_path: Optional[str] = None) -> bool:
         """检查文件名冲突"""
-        if parent_path:
-            relative_path = os.path.join(parent_path, filename)
+        normalized_parent = self._validate_parent_path(parent_path)
+        if normalized_parent:
+            relative_path = os.path.join(normalized_parent, filename)
         else:
             relative_path = filename
-        
-        target_path = os.path.join(self.input_docs_dir, relative_path)
+
+        target_path = self._safe_join_under_input_docs(relative_path)
         return os.path.exists(target_path)
