@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}检索问答 - ExDocIndex{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>检索问答体验</h1>
+    <p class="text-muted">基于已构建索引的文档进行检索增强问答（RAG）</p>
+</div>
+
+<div class="qa-layout">
+    <section class="card qa-input-card">
+        <h3>提问</h3>
+        <div class="form-group">
+            <label for="question">问题</label>
+            <textarea id="question" rows="5" placeholder="例如：项目里如何创建索引？"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="top-k">检索文档数</label>
+            <input id="top-k" type="number" min="1" max="5" value="3" />
+        </div>
+        <div class="qa-actions">
+            <button id="ask-btn" class="btn btn-primary">开始检索问答</button>
+        </div>
+    </section>
+
+    <section class="card qa-result-card">
+        <h3>回答</h3>
+        <div id="answer-box" class="answer-box">请先输入问题并点击“开始检索问答”。</div>
+    </section>
+
+    <section class="card qa-ref-card">
+        <h3>参考文档</h3>
+        <div id="refs-box" class="refs-box">
+            <p class="text-muted">暂无引用</p>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const askBtn = document.getElementById('ask-btn');
+const questionInput = document.getElementById('question');
+const topKInput = document.getElementById('top-k');
+const answerBox = document.getElementById('answer-box');
+const refsBox = document.getElementById('refs-box');
+
+function renderReferences(refs) {
+    if (!refs || refs.length === 0) {
+        refsBox.innerHTML = '<p class="text-muted">暂无引用</p>';
+        return;
+    }
+    refsBox.innerHTML = refs.map(ref => `
+        <div class="ref-item">
+            <div class="ref-title">${escapeHtml(ref.filename)} <span class="ref-score">score: ${ref.score}</span></div>
+            <div class="ref-path">${escapeHtml(ref.filepath)}</div>
+            <div class="ref-excerpt">${escapeHtml(ref.excerpt || '')}</div>
+        </div>
+    `).join('');
+}
+
+async function askQuestion() {
+    const question = questionInput.value.trim();
+    const topK = Number(topKInput.value || 3);
+
+    if (!question) {
+        showToast('请先输入问题', 'warning');
+        return;
+    }
+
+    askBtn.disabled = true;
+    askBtn.textContent = '检索中...';
+    answerBox.textContent = '正在检索和生成回答，请稍候...';
+
+    try {
+        const response = await fetch('/api/qa/query', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({question, top_k: topK})
+        });
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || '请求失败');
+        }
+
+        answerBox.textContent = data.answer || '（空回答）';
+        renderReferences(data.references || []);
+    } catch (error) {
+        answerBox.textContent = '';
+        renderReferences([]);
+        showToast(`问答失败：${error.message}`, 'error');
+    } finally {
+        askBtn.disabled = false;
+        askBtn.textContent = '开始检索问答';
+    }
+}
+
+askBtn.addEventListener('click', askQuestion);
+questionInput.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        askQuestion();
+    }
+});
+</script>
+{% endblock %}

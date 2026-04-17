@@ -1,12 +1,12 @@
 from fastmcp import FastMCP
 import datetime,requests,os,subprocess,shutil,json
 from Utils import get_index, get_doc
+from dotenv import load_dotenv
 # 创建一个FastMCP服务器实例
 mcp = FastMCP(name="ExDocIndexMCP")
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-workdir = ''
-with open('settings.property','r',encoding='utf-8') as f:
-    exec(f.read())
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=False)
+workdir = os.getenv('EXDOCINDEX_WORKDIR', '')
 os.chdir(workdir)
 
 @mcp.tool(

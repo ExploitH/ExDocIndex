@@ -1,13 +1,10 @@
 from doc_summarizer import understand_doc, summarize_doc
 import os,json
+from dotenv import load_dotenv
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-settings = {}
-workdir = ""
-settings_path = os.path.join(os.path.dirname(__file__), 'settings.property')
-if os.path.exists(settings_path):
-    with open(settings_path, 'r', encoding='utf-8') as f:
-        exec(f.read())
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'), override=False)
+workdir = os.getenv("EXDOCINDEX_WORKDIR", "")
 
 def get_index(index_path: str="index.json"):
     """

@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import Database
 from file_state import FileStateManager
+from config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class TaskProcessor:
             self.worker_thread.join(timeout=5)
         logger.info("任务处理器已停止")
     
-    def submit_task(self, task_type: str, file_id: int):
+    def submit_task(self, task_type: str, file_id: int) -> int:
         """
         提交任务到队列
         
@@ -65,6 +66,7 @@ class TaskProcessor:
         task_id = self.db.add_task(task_type, file_id)
         self.task_queue.put(task_id)
         logger.info(f"任务已提交：类型={task_type}, 文件 ID={file_id}, 任务 ID={task_id}")
+        return task_id
     
     def _worker_loop(self):
         """工作线程主循环"""
@@ -267,20 +269,12 @@ class TaskProcessor:
     
     def _load_api_config(self) -> Dict:
         """加载 API 配置"""
-        settings_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'settings.property'
-        )
-        
-        config = {}
-        if os.path.exists(settings_path):
-            with open(settings_path, 'r', encoding='utf-8') as f:
-                exec(f.read(), config)
+        config = get_settings()
         
         return {
-            'api_key': config.get('llm_api_key', ''),
-            'base_url': config.get('llm_base_url', ''),
-            'model': config.get('llm_model', 'qwen3.5-plus')
+            'api_key': config.get('api_key', ''),
+            'base_url': config.get('base_url', ''),
+            'model': config.get('model', 'qwen3.5-plus')
         }
     
     def _save_error_log(self, task_id: int, task: Dict, error_msg: str) -> str:

@@ -28,7 +28,8 @@ if __name__ == '__main__':
         print("=" * 60)
         
         # 启动服务器
-        app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+        debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+        app.run(host='0.0.0.0', port=5000, debug=debug_mode, use_reloader=False)
         
     except KeyboardInterrupt:
         print("\n\n接收到退出信号，正在关闭...")

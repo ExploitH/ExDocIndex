@@ -2,6 +2,7 @@ from openai import OpenAI
 import os
 import logging
 import json
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -13,17 +14,11 @@ logger.addHandler(handler)
 
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-# 从配置文件读取 API 设置
-settings = {}
-settings_path = os.path.join(os.path.dirname(__file__), 'settings.property')
-if os.path.exists(settings_path):
-    with open(settings_path, 'r', encoding='utf-8') as f:
-        exec(f.read())
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'), override=False)
 
 client = OpenAI(
-        api_key=settings.get('llm_api_key', 'sk-YOUR_API_KEY_HERE'),  # 请替换为您的 API Key
-        base_url=settings.get('llm_base_url', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
+        api_key=os.getenv('EXDOCINDEX_LLM_API_KEY', 'sk-YOUR_API_KEY_HERE'),  # 请替换为您的 API Key
+        base_url=os.getenv('EXDOCINDEX_LLM_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
     )
 
 
